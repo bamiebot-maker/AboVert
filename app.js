@@ -321,6 +321,18 @@ Rules:
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = errorData.error?.message || 'Quota exceeded';
+
+        // Extract retry time
+        const match = msg.match(/Please retry in ([0-9.]+)s/);
+        if (match && match[1]) {
+          const waitTime = Math.ceil(parseFloat(match[1]));
+          throw new Error(`Quota exceeded. Please wait ${waitTime} seconds before trying again.`);
+        }
+        throw new Error('Quota exceeded. Please try again later.');
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error?.message || `API error: ${response.status}`);
     }
@@ -346,7 +358,10 @@ Rules:
   } catch (err) {
     console.error('Analysis error:', err);
     let msg = 'Analysis failed. ';
-    if (err.message.includes('API key')) {
+
+    if (err.message.includes('Quota exceeded')) {
+      msg = err.message; // Use the specific quota message
+    } else if (err.message.includes('API key')) {
       msg += 'Check your API key in Settings.';
     } else if (err.message.includes('parse') || err.message.includes('JSON')) {
       msg += 'Could not parse AI response. Try again.';
